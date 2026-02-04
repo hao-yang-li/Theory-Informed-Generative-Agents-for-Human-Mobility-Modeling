@@ -1,0 +1,34 @@
+# --- Simulation Settings ---
+simulation:
+  city_name: "NYC"
+  num_steps: 50
+  num_workers: 10
+  seed: 42
+  alpha: 2.0
+  d_max_km: 0.625
+  enable_dynamic_alpha: false # no dynamic alpha in normal case, only set to 'True' in counterfactual analysis
+  enable_region_filter: false
+  valid_cbg_prefix: "36061" # Manhattan Only, filtered by CBG code's prefix
+
+# --- LLM Settings ---
+llm_generation:
+  model_name: "gemini-2.5-pro"
+  platform: "google"
+  temperature: 0.0
+
+# --- File Paths ---
+paths:
+  # Input Data
+  agent_profiles: "agent_initialization/agent_profiles_NYC.json"
+  cbg_profiles: "agent_initialization/cbg_profiles_NYC.json"
+  cbg_geo_data: "data/Census/2019/metadata/cbg_geographic_data.csv"
+  poi_data_pattern: "data/core_poi/NYC_core_poi.csv"
+  ranges: "data/Census/2019/data/ranges.json"
+  weekly_patterns: "data/Weekly_patterns/Week-2019-06-10/2019-06-10-weekly-patterns_NYC.csv"
+
+  # Action Code Output
+  policy_functions: "agent_initialization/generated_policy_functions.json"
+
+  # Simulation Output Directory
+  output_dir: "TIMA_simulation_output"
+  output_filename: "agent_movements_llm.jsonl"
