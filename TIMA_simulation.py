@@ -420,9 +420,9 @@ def load_and_preprocess(config):
     print("Loading POIs with Map Filtering...")
 
     try:
-        patterns = pd.read_csv(paths['weekly_patterns'], usecols=['safegraph_place_id', 'poi_cbg'], dtype=str)
+        patterns = pd.read_csv(paths['weekly_patterns'], usecols=['poi_id', 'poi_cbg'], dtype=str)
         patterns.dropna(inplace=True)
-        poi_cbg_map = dict(zip(patterns['safegraph_place_id'], patterns['poi_cbg']))
+        poi_cbg_map = dict(zip(patterns['poi_id'], patterns['poi_cbg']))
         print(f"Loaded POI-CBG mapping with {len(poi_cbg_map)} entries.")
     except Exception as e:
         print(f"Error loading Weekly Patterns: {e}")
@@ -435,10 +435,10 @@ def load_and_preprocess(config):
     for f_path in poi_files:
         files_scanned += 1
         df = pd.read_csv(f_path,
-                         dtype={'safegraph_place_id': str, 'naics_code': str, 'latitude': float, 'longitude': float})
+                         dtype={'poi_id': str, 'naics_code': str, 'latitude': float, 'longitude': float})
 
         for _, row in df.iterrows():
-            pid = str(row['safegraph_place_id']).strip()
+            pid = str(row['poi_id']).strip()
 
             cbg = poi_cbg_map.get(pid)
             if not cbg or cbg not in active_cbgs:
