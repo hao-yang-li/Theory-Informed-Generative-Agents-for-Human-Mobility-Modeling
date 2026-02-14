@@ -38,7 +38,7 @@ python TIMA_simulation.py
 
 This will generate the simulation results based on the configured parameters and policy functions in the `TIMA_simulation_output` folder.
 
-### Dummy Data for Testing
+## Dummy Data for Testing
 To comply with data privacy policies of SafeGraph, the Points of Interest (POI) data provided in this repository are **synthetic dummy files**:
 - **`data/core_poi/NYC_core_poi_dummy.csv`**: Contains randomized business IDs and jittered coordinates (approx. ±2km offset).
 - **`data/Weekly_patterns/..._dummy.csv`**: Contains mapped synthetic IDs to maintain simulation consistency.
