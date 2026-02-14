@@ -1,6 +1,6 @@
 # Theory-Informed Generative Agents for Human Mobility Modeling
 
-![Cover Image](assets/fig1.png)
+![Cover Image](assets/fig1.jpg)
 
 ## Environment Setup
 
