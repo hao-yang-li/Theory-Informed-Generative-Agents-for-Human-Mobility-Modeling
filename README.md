@@ -65,7 +65,7 @@ The simulator generates human mobility trajectories in `JSONL` (JSON Lines) form
 
 
 ### 2. Running Evaluation Metrics
-We provide a comprehensive evaluation script `tima_metrics_evaluator.py` to replicate the results presented in the paper (Table 1, Figures 3-5, and Supplementary Table 10). The script calculates macroscopic alignment, fundamental mobility laws, and mobility-mediated social metrics.
+We provide a comprehensive evaluation script `TIMA_analyze.py` to replicate the results presented in the paper (Table 1, Figures 3-5, and Supplementary Table 10). The script calculates macroscopic alignment, fundamental mobility laws, and mobility-mediated social metrics.
 
 **Prerequisites:**
 Ensure all paths to ground truth data and simulation results are correctly configured in `config.yaml`.
