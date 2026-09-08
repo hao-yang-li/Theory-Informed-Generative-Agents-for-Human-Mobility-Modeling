@@ -68306,8 +68306,7 @@
     "census_block_group": "360050175002",
     "sex_distribution": {
       "Female": 0.6,
-      "Male": 0.3,
-      "census_block_group\nMale": 0.1
+      "Male": 0.4
     },
     "age_distribution": {
       "18 to 60 years": 0.5,

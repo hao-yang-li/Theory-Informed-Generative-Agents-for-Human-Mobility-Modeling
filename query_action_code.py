@@ -20,7 +20,7 @@ POI_CATEGORIES = [
     'Accommodation and Food Services'
 ]
 
-# Agent's persona, home cbg's income and education will be added later from home cbg's profile
+# Combine the agent persona with home-CBG context.
 AGENT_TYPE_FEATURES_FROM_AGENT = ["sex", "age_group", "race", "industry"]
 
 
@@ -417,12 +417,12 @@ def validate_generated_code(code_string, agent_type_key_str):
         result = func()
 
         if not isinstance(result, dict):
-            # print(f"Validation failed: Result is not a dict. Type: {type(result)}")
+
             return False
 
         required_keys = ["scores", "cbg_preferences", "probs"]
         if not all(k in result for k in required_keys):
-            # print(f"Validation failed: Missing keys. Found: {list(result.keys())}")
+
             return False
 
         scores = result["scores"]
@@ -441,7 +441,7 @@ def validate_generated_code(code_string, agent_type_key_str):
                 if level not in sub_dict: return False
                 val = sub_dict[level]
                 if not (isinstance(val, (int, float)) and 0.5 <= val <= 1.5):
-                    # print(f"Validation failed: {key}-{level} value {val} out of range [0.5, 1.5]")
+
                     return False
 
         probs = result["probs"]
@@ -449,7 +449,7 @@ def validate_generated_code(code_string, agent_type_key_str):
         if not all(isinstance(p, (int, float)) and 0 <= p <= 1 for p in probs): return False
 
     except Exception as e:
-        # print(f"Validation execution error: {e}")
+
         return False
 
     return True
@@ -479,7 +479,7 @@ def generate_single_agent_policy_split(type_key, profile_data, home_poi_probs, l
 
             # === Validation ===
             if validate_generated_code(final_code, type_key_str):
-                # 成功
+                # Store the validated policy.
                 return {
                     "agent_type_key": list(type_key),
                     "policy_function_code": final_code

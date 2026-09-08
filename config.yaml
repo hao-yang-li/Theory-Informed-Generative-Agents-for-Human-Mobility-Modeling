@@ -6,7 +6,7 @@ simulation:
   seed: 42
   alpha: 2.0
   d_max_km: 0.625
-  enable_dynamic_alpha: false # no dynamic alpha in normal case, only set to 'True' in counterfactual analysis
+  enable_dynamic_alpha: false # Set true to use context-dependent distance decay.
   enable_region_filter: false
   valid_cbg_prefix: "36061" # Manhattan Only, filtered by CBG code's prefix
 

@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-TIMA Metrics Evaluator (Strict Paper Replication)
-- Exact NAICS Mapping restored.
-- Multi-dimensional Stratified CPC (Income, Edu, Race, Sex, Age, Industry).
-- Home-Based Distance calculation.
+Evaluate mobility distributions, activity patterns, and social metrics.
 """
 
 import os
 import json
+import warnings
 import yaml
 import numpy as np
 import pandas as pd
@@ -16,6 +14,7 @@ from math import radians, cos, sin, asin, sqrt
 from scipy.stats import entropy, linregress
 from scipy.sparse import coo_matrix
 from sklearn.metrics import mean_squared_error
+from evaluation_kl import calculate_kl, RevisedKLMetrics
 
 # ==============================================================================
 # 1. Constants & Utils
@@ -76,12 +75,6 @@ def haversine(lat1, lon1, lat2, lon2):
         return 2 * R * asin(sqrt(a))
 
 
-def calculate_kl(p, q):
-    p = np.asarray(p, dtype=float) + 1e-10
-    q = np.asarray(q, dtype=float) + 1e-10
-    return entropy(p / p.sum(), q / q.sum())
-
-
 # ==============================================================================
 # 2. Attribute Helper Functions
 # ==============================================================================
@@ -106,7 +99,7 @@ def discretize_value(value, ranges_dict, category_name):
         if low <= val_float < high:
             return level.capitalize()
 
-    return 'High'  # 数值超过定义的 High 上限
+    return 'High'  # Assign values above the configured bounds to High.
 
 
 def get_dominant_attribute(profile, attribute, ranges_dict):
@@ -141,6 +134,8 @@ class DataProcessor:
         self.poi_coords = {}
         self.poi_categories = {}
         self.ranges_dict = {}
+        self.evaluation = config.get('evaluation', {})
+        self.devices = None
 
     def load_metadata(self):
         print(">>> Loading Metadata (Geo, POI, Ranges)...")
@@ -150,7 +145,12 @@ class DataProcessor:
                 self.ranges_dict = json.load(f)
 
         # 2. Geo Data
-        df_geo = pd.read_csv(self.paths['cbg_geo_data'], dtype={'CBG Code': str})
+        df_geo = pd.read_csv(self.paths['cbg_geo_data'], dtype={'CBG Code': str, 'census_block_group': str})
+        df_geo = df_geo.rename(columns={'census_block_group': 'CBG Code',
+                                        'latitude': 'Latitude', 'longitude': 'Longitude'})
+        if 'Year' in df_geo:
+            df_geo = df_geo[df_geo['Year'] == self.evaluation.get('year', 2019)]
+        df_geo = df_geo.drop_duplicates('CBG Code')
         for _, row in df_geo.iterrows():
             cbg = row['CBG Code']
             # Simple fallback for Centroid WKT or Lat/Lon cols
@@ -161,22 +161,36 @@ class DataProcessor:
                 self.cbg_centroids[cbg] = (float(parts[1]), float(parts[0]))
 
         # 3. POI Data (Core POI)
-        df_poi = pd.read_csv(self.paths['poi_data_pattern'], dtype={'safegraph_place_id': str})
+        df_poi = pd.read_csv(self.paths['poi_data_pattern'], dtype={'safegraph_place_id': str, 'poi_id': str})
+        if 'safegraph_place_id' not in df_poi:
+            df_poi = df_poi.rename(columns={'poi_id': 'safegraph_place_id'})
+        df_poi = df_poi.drop_duplicates('safegraph_place_id')
         for _, row in df_poi.iterrows():
             pid = row['safegraph_place_id']
             self.poi_coords[pid] = (float(row['latitude']), float(row['longitude']))
 
             # NAICS Mapping Logic
             naics_str = str(row.get('naics_code', ''))
-            if len(naics_str) >= 2:
+            if len(naics_str) >= 2 and naics_str[:2].isdigit():
                 prefix = int(naics_str[:2])
                 self.poi_categories[pid] = NAICS_TO_CATEGORY_MAP.get(prefix, 'Others')
             else:
                 self.poi_categories[pid] = 'Others'
 
+        panel_path = self.paths.get('home_panel_summary')
+        if panel_path:
+            panel = pd.read_csv(panel_path, dtype={'census_block_group': str},
+                                usecols=['census_block_group', 'number_devices_residing'])
+            self.devices = panel.drop_duplicates('census_block_group').set_index(
+                'census_block_group')['number_devices_residing'].to_dict()
+
     def process_real_data(self):
         print(">>> Processing Real Data...")
-        df_raw = pd.read_csv(self.paths['weekly_patterns'])
+        df_raw = pd.read_csv(self.paths['weekly_patterns'], dtype={'safegraph_place_id': str, 'poi_id': str, 'poi_cbg': str})
+        if 'safegraph_place_id' not in df_raw:
+            df_raw = df_raw.rename(columns={'poi_id': 'safegraph_place_id'})
+        self.poi_to_cbg = df_raw.dropna(subset=['poi_cbg']).drop_duplicates(
+            'safegraph_place_id').set_index('safegraph_place_id')['poi_cbg'].to_dict()
         records = []
 
         for _, row in tqdm(df_raw.iterrows(), total=len(df_raw), desc="Expanding Visits"):
@@ -189,10 +203,10 @@ class DataProcessor:
             if pid in self.poi_coords:
                 p_lat, p_lon = self.poi_coords[pid]
             else:
-                continue  # Cannot calc distance
+                continue  # Skip POIs with unavailable coordinates.
 
             try:
-                # visitor_home_cbgs is JSON string: "{'360...': 4, ...}"
+                # Decode home-CBG visit counts from JSON.
                 visits = json.loads(row['visitor_home_cbgs'])
                 for home_cbg, cnt in visits.items():
                     if home_cbg in self.cbg_centroids:
@@ -221,22 +235,30 @@ class DataProcessor:
             for line in f:
                 try:
                     row = json.loads(line)
-                    home = row['home_cbg']
-                    pid = row['poi_id']
+                    home = str(row['home_cbg'])
+                    pid = str(row['poi_id'])
 
                     # Recalculate Distance (Consistency)
-                    dist = row.get('dist_km', np.nan)
-                    if home in self.cbg_centroids and pid in self.poi_coords:
+                    dist = np.nan
+                    if pid == 'Home':
+                        dist = 0.0
+                    elif home in self.cbg_centroids and pid in self.poi_coords:
                         h_lat, h_lon = self.cbg_centroids[home]
                         p_lat, p_lon = self.poi_coords[pid]
                         dist = haversine(h_lat, h_lon, p_lat, p_lon)
 
+                    destination = (home if pid == 'Home' else
+                                   row.get('poi_cbg') or self.poi_to_cbg.get(pid)
+                                   or row.get('current_cbg_of_agent'))
+                    category = row.get('category') or row.get('poi_category')
+                    if category not in POI_CATEGORIES:
+                        category = self.poi_categories.get(pid, 'Others')
                     records.append({
-                        'agent_id': row['agent_id'],
+                        'agent_id': str(row['agent_id']),
                         'home_cbg': home,
-                        'poi_cbg': row['poi_cbg'],
+                        'poi_cbg': str(destination) if destination is not None else '',
                         'poi_id': pid,
-                        'category': row['category'],
+                        'category': category,
                         'count': 1,
                         'dist_km': dist
                     })
@@ -263,13 +285,75 @@ class DataProcessor:
 # 4. Evaluator
 # ==============================================================================
 
+def returner_fraction(frame, cbg_coords, poi_coords, k_values):
+    """Fraction of home-CBG activity profiles satisfying r_g(k) > r_g / 2."""
+    profiles = []
+    for cbg, group in frame.groupby('home_cbg', sort=False):
+        home = cbg_coords.get(str(cbg))
+        if home is None:
+            continue
+        visits = []
+        for pid, count in group.groupby('poi_id', sort=False)['count'].sum().items():
+            point = poi_coords.get(str(pid))
+            if point is None or not np.all(np.isfinite(point)) or count <= 0:
+                continue
+            distance = haversine(*home, *point)
+            if not np.isfinite(distance) or distance > 500:
+                continue
+            visits.append((point, float(count)))
+        if not visits:
+            continue
+
+        def weighted_radius(subset):
+            total = sum(count for _, count in subset)
+            latitude = sum(point[0] * count for point, count in subset) / total
+            longitude = sum(point[1] * count for point, count in subset) / total
+            return sqrt(sum(haversine(latitude, longitude, *point)**2 * count
+                            for point, count in subset) / total)
+
+        total_rg = weighted_radius(visits)
+        visits.sort(key=lambda item: item[1], reverse=True)
+        flags = []
+        # Once k includes all visited POIs, the subset radius is unchanged.
+        subset_radii = {}
+        for k in k_values:
+            size = min(int(k), len(visits))
+            if size not in subset_radii:
+                subset_radii[size] = weighted_radius(visits[:size])
+            flags.append(total_rg > 0 and subset_radii[size] > total_rg / 2)
+        profiles.append(flags)
+    if not profiles:
+        warnings.warn('Explorer/returner analysis requires valid home-CBG visits and POI coordinates.')
+        return np.full(len(k_values), np.nan)
+    return np.mean(profiles, axis=0)
+
+
+def returner_transition(k_values, fraction_values):
+    """Interpolate the 0.5 crossing in log10(k)."""
+    x, y = np.asarray(k_values), np.asarray(fraction_values)
+    if not len(y) or not np.all(np.isfinite(y)):
+        return float('nan')
+    index = np.searchsorted(y, 0.5)
+    if index == 0:
+        return float(x[0])
+    if index >= len(y):
+        return float(x[-1])
+    x0, x1 = np.log10(x[index - 1]), np.log10(x[index])
+    y0, y1 = y[index - 1], y[index]
+    return float(10 ** (x0 + (0.5 - y0) * (x1 - x0) / (y1 - y0)))
+
+
 class MobilityEvaluator:
-    def __init__(self, df_real, df_sim, agent_map, cbg_map, ranges_dict):
+    def __init__(self, df_real, df_sim, agent_map, cbg_map, ranges_dict,
+                 cbg_coords=None, poi_coords=None, devices=None, sampling_threshold=0.0):
         self.real = df_real
         self.sim = df_sim
         self.agent_map = agent_map
         self.cbg_map = cbg_map
         self.ranges_dict = ranges_dict
+        self.kl_metrics = RevisedKLMetrics(
+            df_real, df_sim, agent_map, cbg_map, POI_CATEGORIES,
+            cbg_coords or {}, poi_coords or {}, devices, sampling_threshold)
 
         # Pre-calc Tracts
         for df in [self.real, self.sim]:
@@ -279,12 +363,7 @@ class MobilityEvaluator:
     # --- Table 1 Metrics ---
 
     def metric_trip_distance_kl(self):
-        all_d = np.concatenate([self.real['dist_km'].dropna(), self.sim['dist_km'].dropna()])
-        bins = np.linspace(0, np.percentile(all_d, 99.5), 50)
-
-        hr, _ = np.histogram(self.real['dist_km'], bins=bins, weights=self.real['count'], density=True)
-        hs, _ = np.histogram(self.sim['dist_km'], bins=bins, weights=self.sim['count'], density=True)
-        return calculate_kl(hr, hs)
+        return self.kl_metrics.trip_distance()
 
     def metric_od_flow_cpc(self):
         # Tract Level
@@ -312,12 +391,7 @@ class MobilityEvaluator:
         return mean_squared_error(nr, ns)
 
     def metric_poi_proportion_kl(self):
-        pr = self.real.groupby('category')['count'].sum()
-        ps = self.sim.groupby('category')['count'].sum()
-        cats = sorted(POI_CATEGORIES)
-        vr = pr.reindex(cats, fill_value=0).values
-        vs = ps.reindex(cats, fill_value=0).values
-        return calculate_kl(vr, vs)
+        return self.kl_metrics.poi_proportion()
 
     def metric_stratified_od_fidelity(self):
         """
@@ -335,9 +409,8 @@ class MobilityEvaluator:
             )
 
         # For Sim Data (Map Agent -> Attribute)
-        # agent_map has attributes directly, but might need discretization for inc/edu
-        # Note: 'industry' in agent_profiles is usually raw string, needs to match CBG aggregation if needed
-        # Assuming agent profiles are already aligned or raw strings match.
+
+
         def get_agent_attr(aid, dim):
             prof = self.agent_map.get(str(aid), {})
             if dim == 'income':
@@ -349,7 +422,7 @@ class MobilityEvaluator:
 
         # Pre-compute agent attributes dataframe to speed up map
         agent_df = pd.DataFrame.from_dict(self.agent_map, orient='index')
-        # ... logic to discretize income/edu in agent_df ...
+        # Discretize the contextual attributes.
         agent_df['income'] = agent_df['home_cbg_income'].apply(
             lambda x: discretize_value(x, self.ranges_dict, 'income'))
         agent_df['education'] = agent_df['home_cbg_edu'].apply(
@@ -383,6 +456,21 @@ class MobilityEvaluator:
 
     # --- Fundamental Laws ---
 
+    def analyze_explorer_returner(self):
+        k_values = np.arange(1, 51)
+        real_curve = returner_fraction(self.real, self.kl_metrics.cbg_coords,
+                                       self.kl_metrics.poi_coords, k_values)
+        sim_curve = returner_fraction(self.sim, self.kl_metrics.cbg_coords,
+                                      self.kl_metrics.poi_coords, k_values)
+        return {
+            'k_values': k_values,
+            'empirical_fraction': real_curve,
+            'simulated_fraction': sim_curve,
+            'empirical_k_star': returner_transition(k_values, real_curve),
+            'simulated_k_star': returner_transition(k_values, sim_curve),
+            'mae': float(np.mean(np.abs(sim_curve - real_curve))),
+        }
+
     def analyze_fundamental_laws(self):
         # 1. Zipf (RMSE)
         fr = self.real.groupby('poi_id')['count'].sum().sort_values(ascending=False).values
@@ -392,61 +480,14 @@ class MobilityEvaluator:
         ys = np.log((fs[:k] / fs.sum()) + 1e-10)
         zipf_rmse = np.sqrt(mean_squared_error(yr, ys))
 
-        # 2. Rg (Med, KL)
-        # Sim Rg (Individual)
-        sim_rgs = []
-        for _, grp in self.sim.groupby('agent_id'):
-            # Approx rg using distances from home (simplified)
-            rg = np.sqrt(np.mean(grp['dist_km'] ** 2))
-            sim_rgs.append(rg)
+        # 2. Rg (CBG-aggregated visit-weighted activity centers)
+        rg_median, rg_kl = self.kl_metrics.radius_of_gyration()
 
-        # Real Rg Proxy (Weighted Distance Distribution)
-        # Using dist_km distribution as proxy for Rg distribution comparison
-        bins = np.logspace(np.log10(0.1), np.log10(100), 50)
-        hr, _ = np.histogram(self.real['dist_km'], bins=bins, weights=self.real['count'], density=True)
-        hs, _ = np.histogram(sim_rgs, bins=bins, density=True)
-        rg_kl = calculate_kl(hr, hs)
+        # 3. Law 3 (empirical and simulated home-CBG activity profiles)
+        returners = self.analyze_explorer_returner()
+        k_star, mae = returners['simulated_k_star'], returners['mae']
 
-        # 3. Law 3 (k*, MAE)
-        k_range = np.arange(1, 51)
-        # Sim Curve
-        counts = np.zeros(len(k_range))
-        valid_agents = 0
-        for _, grp in self.sim.groupby('agent_id'):
-            visits = grp['poi_id'].value_counts()
-            if len(visits) == 0: continue
-            valid_agents += 1
-
-            top_locs = visits.index
-            # Pre-map distances
-            dist_map = grp.set_index('poi_id')['dist_km'].to_dict()
-            total_rg = np.sqrt(np.mean(grp['dist_km'] ** 2))
-
-            running_sq = 0
-            running_cnt = 0
-
-            for i, k_val in enumerate(k_range):
-                if i < len(top_locs):
-                    loc = top_locs[i]
-                    cnt = visits[loc]
-                    d = dist_map[loc]
-                    running_sq += (d ** 2) * cnt
-                    running_cnt += cnt
-
-                if running_cnt > 0:
-                    rg_k = np.sqrt(running_sq / running_cnt)
-                    if rg_k > (total_rg / 2): counts[i] += 1
-                elif counts[i - 1] if i > 0 else 0:
-                    counts[i] += 1
-
-        sim_curve = counts / valid_agents
-        k_star = np.interp(0.5, sim_curve, k_range)
-
-        # Real Curve Approx (Logistic for NYC)
-        real_curve = 1 / (1 + np.exp(-0.25 * (k_range - 2.11)))
-        mae = np.mean(np.abs(sim_curve - real_curve))
-
-        return zipf_rmse, np.median(sim_rgs), rg_kl, k_star, mae
+        return zipf_rmse, rg_median, rg_kl, k_star, mae
 
     # --- Social Segregation ---
 
@@ -531,7 +572,9 @@ if __name__ == "__main__":
     df_sim = proc.process_sim_data()
     agent_map, cbg_map, ranges = proc.load_profiles()
 
-    ev = MobilityEvaluator(df_real, df_sim, agent_map, cbg_map, ranges)
+    ev = MobilityEvaluator(df_real, df_sim, agent_map, cbg_map, ranges,
+                           proc.cbg_centroids, proc.poi_coords, proc.devices,
+                           proc.evaluation.get('sampling_threshold', 0.0))
 
     print("\n" + "=" * 50)
     print("Table 1: Macro-Regularity Alignment")

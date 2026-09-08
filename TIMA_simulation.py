@@ -224,7 +224,7 @@ class Agent:
 
             p_explore = self.cached_probs[idx]
 
-        # fallback if error
+        # Use the default exploration probability after an evaluation error.
         else:
             print("no LLM EPR, fallback")
             if S == 0:
@@ -279,7 +279,7 @@ class Agent:
         poi_gravities = {}
         poi_ids = []
 
-        if self.cached_alpha_mult is None: #normal case, no dynamic alpha
+        if self.cached_alpha_mult is None: # Routine distance-decay exponent.
             personal_alpha = self.base_alpha
         else:
             if self.enable_dynamic_alpha:
@@ -567,7 +567,7 @@ def main():
             except Exception:
                 break
 
-        # 关闭进度条
+        # Close the progress bar.
         for bar in bars:
             bar.close()
 
