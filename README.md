@@ -1,4 +1,4 @@
-# Theory-Informed Generative Agents for Human Mobility Modeling
+# Theory-Informed Human Mobility Modeling with LLM-Derived Behavioral Priors
 
 ![Cover Image](assets/fig1.jpg)
 
