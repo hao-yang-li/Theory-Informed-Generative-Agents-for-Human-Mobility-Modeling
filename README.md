@@ -12,7 +12,7 @@ pip install -r requirements.txt
 
 ## Parameter Setup
 
-Before running the simulation, you need to modify the file paths in `config.yaml` to match your local directory structure. Update the paths in the `paths` section of `config.yaml` to point to your local data directories and files.
+Configure the selected city's inputs and outputs in `config.yaml` as described under [City-specific Configuration](#city-specific-configuration).
 
 ## Population and Agent Initialization
 
@@ -87,6 +87,36 @@ The geographic file above is produced by the archive-based command. When using t
 
 See [population initialization instructions](agent_initialization/README.md) for the four modules, optional CBG selection, and complete output list. The archive-based initialization has been tested for NYC and Orlando.
 
+## City-specific Configuration
+
+After initialization, update `config.yaml` with the selected city's profiles, geographic data, POIs, and weekly visit data. Behavioral inference, simulation, and evaluation all read this configuration from the repository root.
+
+For example, after initializing Orlando from the downloaded archives, update the following entries in the existing configuration. Replace the example POI and visit-data paths with your corresponding files, and retain the other settings:
+
+```yaml
+simulation:
+  city_name: "Orlando"
+  enable_region_filter: false
+
+paths:
+  agent_profiles: "generated/Orlando/agent_profiles_Orlando.json"
+  cbg_profiles: "generated/Orlando/cbg_profiles_Orlando.json"
+  cbg_geo_data: "generated/Orlando/cbg_geographic_data.csv"
+  poi_data_pattern: "/path/to/Orlando_core_poi.csv"
+  weekly_patterns: "/path/to/Orlando_weekly_patterns.csv"
+  policy_functions: "generated/Orlando/generated_behavioral_rules.json"
+  output_dir: "TIMA_simulation_output/Orlando"
+  output_filename: "agent_movements_llm.jsonl"
+```
+
+The input paths determine which city's records are loaded. `simulation.city_name` records the city label. Use POI and CBG identifiers that match across the profiles, geographic records, POI data, and weekly visit data. The initialization step prepares population and CBG inputs; supply the corresponding POI and visit files separately. The included dummy files provide these inputs for the NYC demonstration.
+
+Set `simulation.d_max_km` to the value appropriate for the selected city's local opportunity density, following the method described in the manuscript. To simulate a CBG subset, set `simulation.enable_region_filter` to `true` and specify its prefix in `simulation.valid_cbg_prefix`.
+
+Use a separate `paths.policy_functions` file for each city's behavioral inference and a separate `paths.output_dir` for its simulation results. Then complete behavioral inference, simulation, and evaluation in that order using the commands below.
+
+Evaluation reads the selected city's reference visits from `paths.weekly_patterns` and its simulated trajectories from `paths.output_dir` and `paths.output_filename`. Keep the same city configuration for both stages. The additional home-panel input for Trip Distance KL and POI Proportion KL is described under [Running Evaluation Metrics](#2-running-evaluation-metrics).
+
 ## LLM-based Behavioral Inference
 
 Configure the LLM provider and model in `config.yaml` and the corresponding API key under `api_keys` in your local `secrets.yaml`. To infer profile-conditioned behavioral parameters and rules, run:
@@ -101,7 +131,7 @@ This infers POI-category preferences, socioeconomic affinity weights, and explor
 
 After completing behavioral inference:
 
-1. Set `policy_functions` under `paths` in `config.yaml` to the generated behavioral-rule file.
+1. Complete [City-specific Configuration](#city-specific-configuration) and set `paths.policy_functions` to the behavioral-rule file generated for that city.
 
 2. Run the simulation:
 
@@ -109,7 +139,7 @@ After completing behavioral inference:
 python TIMA_simulation.py
 ```
 
-This generates trajectories using the configured simulation parameters and inferred behavioral rules, and saves the results in the `TIMA_simulation_output` folder.
+This generates trajectories using the configured simulation parameters and inferred behavioral rules. Results are saved under `paths.output_dir` using `paths.output_filename` from `config.yaml`.
 
 ## Dummy Data for Testing
 The full SafeGraph mobility data are subject to licensing restrictions and are not redistributed in this repository. The provided dummy files are derived from source data by replacing POI identifiers and perturbing coordinates:
@@ -144,7 +174,7 @@ The simulator generates human mobility trajectories in `JSONL` (JSON Lines) form
 `TIMA_analyze.py` calculates macroscopic alignment, fundamental mobility laws, and mobility-mediated social metrics.
 
 **Prerequisites:**
-Ensure all paths to ground truth data and simulation results are correctly configured in `config.yaml`.
+Use the same [city-specific configuration](#city-specific-configuration) as the simulation. Set `paths.weekly_patterns` to the reference visit data and `paths.output_dir` and `paths.output_filename` to the simulation results to evaluate. The script reads the corresponding POI, geographic, profile, and behavioral-rule files from this configuration.
 
 For Trip Distance KL and POI Proportion KL, add `home_panel_summary` under `paths`, pointing to the matching week's home-panel CSV with `census_block_group` and `number_devices_residing` columns. If it is not supplied, these two metrics are reported as unavailable (`NaN`).
 
