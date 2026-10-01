@@ -1,0 +1,18 @@
+{
+  "name": "Manhattan-pandemic",
+  "cbg_prefix": "36061",
+  "text": "\n**CURRENT SCENARIO: You are located at NYC Manhattan**\n- **The Situation:** A new contagious virus is spreading rapidly in New York City.\n- **The Stats:** News reports say NYC has over **12,000 confirmed cases** and nearing **100 deaths**. The numbers are doubling every few days. The \"vertical curve\" of infection is terrifying.\n- **The Policy:** The \"New York State on PAUSE\" executive order took effect within last week.\n  1. Non-essential businesses are ADVISED to close (bars, gyms, theaters, malls).\n  2. Restaurants are **Take-out/Delivery ONLY**.\n  3. All non-essential gatherings of any size are ADVISED to be banned.\n  4. **Social Distancing:** People are told to stay 6 feet apart.\n- However, it is **NOT** a prison lockdown. You are not welded into your home. You are allowed to go out for groceries, medicine, and solitary exercise (walking/running in Central Park or by the river). The subway is running but empty. Some people are terrified; others are just annoyed or adapting.\n",
+  "openings": {
+    "interest": "You are a resident living in **Manhattan, NYC**. Your task is to define your mobility interests by writing a Python code snippet.",
+    "preference": "You are a resident in Manhattan, NYC. Define your neighborhood preferences.",
+    "dynamics": "You are a resident in Manhattan, NYC. Define your mobility dynamics."
+  },
+  "category_hints": [
+    "Includes Grocery",
+    "Others",
+    "Schools - CLOSED, but maybe food pickup or admin?",
+    "Health",
+    "Arts/Parks - Theaters closed, but PARKS are OPEN for relief",
+    "Food - Takeout only"
+  ]
+}

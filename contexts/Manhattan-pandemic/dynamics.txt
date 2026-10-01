@@ -1,0 +1,62 @@
+
+{opening}
+
+{COMMON_SCENARIO_TEXT}
+
+**Your Resident Profile**
+- **Your Sex:** {agent_sex}
+- **Your Age Group:** {agent_age_group}
+- **Your Race:** {agent_race}
+- **Your Job Sector:** {agent_industry}
+- **Your Home Neighborhood's General Education Level:** {home_cbg_edu_level}
+- **Your Home Neighborhood's General Income Level:** {home_cbg_income_level}
+- **Your Home Neighborhood's Vibe (Context Only):** {home_cbg_poi_probs}
+  * (Note: This shows what is currently physically around you. It sets the context, but **DO NOT** simply give high scores to POI types just because they are abundant nearby. Output your **intrinsic** interests based on your age, job, etc.)
+
+---
+Categories (Indices):
+0: '{category_0}' {hint_0}
+1: '{category_1}' {hint_1}
+2: '{category_2}' {hint_2}
+3: '{category_3}' {hint_3}
+4: '{category_4}' {hint_4}
+5: '{category_5}' {hint_5}
+
+
+
+**Task:** Define `exploration_probs` (List[6]) and `alpha_multiplier` (float).
+
+1.  **`exploration_probs` (List of 6 floats):**
+    - A list of 6 numbers between 0.0 and 1.0.
+    - This represents your probability of choosing to **EXPLORE** a new place based on how many unique places ($S$) you have *already* visited this week.
+    - As $S$ increases (you know more places), you typically tend to **Return** more (so exploration prob decreases).
+    - Provide probabilities for these specific distinct visit counts:
+        - **S = 0:** (Start of the week, you know nowhere. Usually high.)
+        - **S = 5:** (You know 5 places.)
+        - **S = 10:** (You know 10 places.)
+        - **S = 15:** (You know 15 places.)
+        - **S = 20:** (You know 20 places.)
+        - **S >= 25:** (You know 25+ places. Routine is likely established.)
+        
+**2. `alpha_multiplier` (Friction of Distance):**
+   - A single number (typically 0.5 to 2.0).
+    - This factor controls how much **Distance** stops you from visiting a place.
+    - Base Logic: Attraction = Interest / (Distance ^ (2.0 * alpha_multiplier))
+    - **How to choose:**
+        - **1.0 (Standard):** You travel like an average person.
+        - **> 1.0 (e.g., 1.5, 2.0):** You stay **VERY LOCAL**. You hate traveling far.
+        - **< 1.0 (e.g., 0.5, 0.8):** You are **Willing to Travel**. Distance doesn't bother you much.
+    
+**Output Format Constraint:**
+Return ONLY the Python code block wrapped in ```python ... ``` containing the definitions of the two variables.
+
+**Example:**
+```python
+# Exploration probabilities based on visited count (S)
+# S=0, S=5, S=10, S=15, S=20, S>=25
+exploration_probs = [<float>, <float>, <float>, <float>, <float>, <float>] 
+
+# As an <your demographic> person, I can travel (your travel pattern, far away or local).
+# High multiplier makes distant places very unattractive, and vice versa.
+alpha_multiplier = <float>
+```

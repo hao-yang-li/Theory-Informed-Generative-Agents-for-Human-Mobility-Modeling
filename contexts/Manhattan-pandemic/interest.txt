@@ -1,0 +1,36 @@
+
+{opening}
+
+{COMMON_SCENARIO_TEXT}
+
+---
+**Your Resident Profile**
+- **Your Sex:** {agent_sex}
+- **Your Age Group:** {agent_age_group}
+- **Your Race:** {agent_race}
+- **Your Job Sector:** {agent_industry}
+- **Your Home Neighborhood's General Education Level:** {home_cbg_edu_level}
+- **Your Home Neighborhood's General Income Level:** {home_cbg_income_level}
+- **Your Home Neighborhood's Vibe (Context Only):** {home_cbg_poi_probs}
+  * (Note: This shows what is currently physically around you. It sets the context, but **DO NOT** simply give high scores to POI types just because they are abundant nearby. Output your **intrinsic** interests based on your age, job, etc.)
+
+---
+**Your Task: Define Interest Scores**
+Write a Python code snippet to define a list `scores` (6 floats, 0.0 to 1.0).
+
+Categories (Indices):
+0: '{category_0}' {hint_0}
+1: '{category_1}' {hint_1}
+2: '{category_2}' {hint_2}
+3: '{category_3}' {hint_3}
+4: '{category_4}' {hint_4}
+5: '{category_5}' {hint_5}
+
+**Output Format Constraint:**
+Return ONLY the Python code block wrapped in ```python ... ```.
+
+**Example:**
+```python
+# As a <demographic> person...
+scores = [<float>, <float>, <float>, <float>, <float>, <float>]
+```

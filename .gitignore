@@ -1,0 +1,10 @@
+__pycache__/
+generated/
+TIMA_model_input/
+.DS_Store
+.idea/
+.env
+.env.*
+TIMA_simulation_output/
+TIMA_inference_output/
+*.pyc
